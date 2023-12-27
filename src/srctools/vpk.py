@@ -217,10 +217,12 @@ class FileInfo:
 
         self.crc = new_checksum
 
-        self.start_data = data[:self.vpk.dir_limit]
-        arch_data = data[self.vpk.dir_limit:]
-
-        self.arch_len = len(arch_data)
+        if arch_index is None:
+            self.start_data = data
+        else:
+            self.start_data = data[:self.vpk.dir_limit]
+            arch_data = data[self.vpk.dir_limit:]
+            self.arch_len = len(arch_data)
 
         if self.arch_len:
             self.arch_index = arch_index
@@ -430,6 +432,9 @@ class VPK:
 
             # Write in sorted order - not required, but this ensures multiple
             # saves are deterministic.
+            fileDatas: list[bytes] = []
+            fileDatasLen = 0
+            
             for ext, folders in sorted(self._fileinfo.items(), key=key_getter):
                 if not folders:
                     continue
@@ -440,14 +445,26 @@ class VPK:
                     _write_nullstring(file, folder)
                     for filename, info in sorted(files.items(), key=key_getter):
                         _write_nullstring(file, filename)
+
                         if info.arch_index is None:
                             arch_ind = DIR_ARCH_INDEX
                         else:
                             arch_ind = info.arch_index
+
+                        start_data_len = len(info.start_data)
+                        if arch_ind is DIR_ARCH_INDEX and start_data_len > self.dir_limit:
+                            info.arch_len = start_data_len
+                            info.offset = fileDatasLen
+                            fileDatasLen += info.arch_len
+                            fileDatas.append(info.start_data)
+                            info.start_data = bytes()
+                            start_data_len = 0
+                            
+                        
                         file.write(struct.pack(
                             '<IHHIIH',
                             info.crc,
-                            len(info.start_data),
+                            start_data_len,
                             arch_ind,
                             info.offset,
                             info.arch_len,
@@ -462,6 +479,10 @@ class VPK:
 
             # Calculate the length of the header..
             dir_len = file.tell() - header_len
+
+            if fileDatasLen > 0:
+                for d in fileDatas:
+                    file.write(d)
 
             file.write(self.footer_data)
 
