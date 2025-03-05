@@ -61,7 +61,7 @@ def iter_nullstr(file: IO[bytes]) -> Iterator[str]:
 def _write_nullstring(file: IO[bytes], string: str) -> None:
     """Write a null-terminated ASCII string back to the file."""
     if string:
-        file.write(string.encode('ascii', 'surrogateescape') + b'\x00')
+        file.write(string.encode('utf-8', 'surrogateescape') + b'\x00')
     else:
         # Empty strings are written as a space.
         file.write(b' \x00')
@@ -627,8 +627,6 @@ class VPK:
         self._check_writable()
 
         path, name, ext = _get_file_parts(filename, root)
-        if not _check_is_ascii(path) or not _check_is_ascii(name) or not _check_is_ascii(ext):
-            raise ValueError(f'VPK filename {filename!r} must be ASCII format!')
 
         try:
             ext_infos = self._fileinfo[ext]
